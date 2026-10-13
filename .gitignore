@@ -1,0 +1,110 @@
+# ====================================================================
+# GymApp - .gitignore
+# Proyecto Full-Stack: .NET 10 (Backend) + React 19 / Vite (Client PWA)
+# ====================================================================
+
+# --------------------------------------------------
+# .NET / C# (Backend)
+# --------------------------------------------------
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
+*.binlog
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+TestResults/
+[Bb]uildLog.*
+
+# Entity Framework Core / Database migrations artifacts
+*.db
+*.db-shm
+*.db-wal
+
+# --------------------------------------------------
+# Node.js / React 19 / Vite / PWA (Client)
+# --------------------------------------------------
+node_modules/
+client/node_modules/
+dist/
+dist-ssr/
+client/dist/
+client/dist-ssr/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# --------------------------------------------------
+# Variables de Entorno y Secretos (OWASP A02 / A07)
+# --------------------------------------------------
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+client/.env.local
+client/.env.*.local
+appsettings.Production.json
+appsettings.*.local.json
+
+# Claves criptográficas y certificados SSL
+*.pem
+*.key
+*.pfx
+*.p12
+*.cer
+*.crt
+
+# --------------------------------------------------
+# Docker / Bases de Datos Locales
+# --------------------------------------------------
+pgdata/
+postgres_data/
+docker-volumes/
+
+# --------------------------------------------------
+# IDEs y Editores de Código
+# --------------------------------------------------
+# Visual Studio
+.vs/
+*.slnx.sqlite
+
+# JetBrains (Rider, WebStorm)
+.idea/
+*.iws
+*.iml
+
+# Visual Studio Code (preservar configuraciones compartidas de equipo si existen)
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# --------------------------------------------------
+# Sistema Operativo y Temporales
+# --------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+*~
+*.swp
+*.swo
+
+# --------------------------------------------------
+# Cobertura y Reportes de Pruebas
+# --------------------------------------------------
+coverage/
+*.lcov
+.nyc_output/

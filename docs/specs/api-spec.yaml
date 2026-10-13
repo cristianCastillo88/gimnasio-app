@@ -1,0 +1,1145 @@
+openapi: 3.1.0
+info:
+  title: GymApp API Specification
+  description: API para la PWA de Personal Trainer y Alumnos, orientada a Spec-Driven Development (SDD) con soporte de sincronización offline idempotente.
+  version: 1.0.0
+servers:
+  - url: http://localhost:5000/api
+    description: Servidor de desarrollo local (.NET 10)
+
+paths:
+  /auth/login:
+    post:
+      summary: Iniciar sesión
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Autenticación exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Credenciales inválidas
+
+  /auth/verify-activation-token:
+    get:
+      summary: Verificar validez de un token de activación de alumno
+      operationId: verifyActivationToken
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Token válido con datos para personalización
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyActivationTokenResponse'
+        '400':
+          description: Token inválido
+        '404':
+          description: Token no encontrado o expirado
+
+  /auth/activate-account:
+    post:
+      summary: Activar cuenta de alumno y definir su contraseña personal
+      operationId: activateAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivateAccountRequest'
+      responses:
+        '200':
+          description: Cuenta activada exitosamente con autenticación automática (JWT)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Solicitud o contraseña inválida
+        '404':
+          description: Token no encontrado o expirado
+
+  /auth/change-password:
+    post:
+      summary: Cambiar contraseña de la cuenta en sesión activa (Alumno o Entrenador)
+      operationId: changePassword
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Contraseña modificada exitosamente
+        '400':
+          description: Solicitud o contraseña inválida (no cumple política)
+        '401':
+          description: Contraseña actual incorrecta o no autenticado
+
+  /auth/forgot-password:
+    post:
+      summary: Solicitar enlace de recuperación de contraseña por correo electrónico (Entrenador)
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '200':
+          description: Solicitud procesada correctamente con respuesta neutral anti-enumeración
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForgotPasswordResponse'
+        '400':
+          description: Correo electrónico inválido
+
+  /auth/verify-reset-token:
+    get:
+      summary: Verificar validez del token de restablecimiento por correo
+      operationId: verifyResetToken
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Token de restablecimiento válido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyResetTokenResponse'
+        '400':
+          description: Token inválido
+        '404':
+          description: Token no encontrado o expirado
+
+  /auth/reset-password:
+    post:
+      summary: Restablecer contraseña mediante token de correo y autologuear
+      operationId: resetPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Contraseña restablecida correctamente con autologin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Contraseña no cumple política de seguridad
+        '404':
+          description: Token inválido o expirado
+
+  /students/me/routine:
+    get:
+      summary: Obtener la rutina activa del alumno autenticado
+      operationId: getActiveStudentRoutine
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Rutina activa con sus días y ejercicios programados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveRoutineResponse'
+        '404':
+          description: No hay rutina activa asignada
+
+  /exercises/{id}/history:
+    get:
+      summary: Obtener el historial previo de series de un ejercicio para el alumno
+      operationId: getExerciseHistory
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Últimas sesiones y cargas registradas para el ejercicio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExerciseHistoryResponse'
+
+  /workouts/sync:
+    post:
+      summary: Sincronizar sesiones de entrenamiento registradas en la PWA (Idempotente)
+      description: Endpoint diseñado para la sincronización por lotes tras recuperar conexión en el gimnasio.
+      operationId: syncWorkoutSessions
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncWorkoutBatchRequest'
+      responses:
+        '200':
+          description: Resultado de la sincronización por sesión
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncWorkoutBatchResponse'
+
+  /trainer/students:
+    get:
+      summary: Listar alumnos a cargo del Trainer
+      operationId: getTrainerStudents
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de alumnos y sus estados de cuota
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StudentSummary'
+
+    post:
+      summary: Registrar nuevo alumno
+      operationId: createStudent
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStudentRequest'
+      responses:
+        '201':
+          description: Alumno creado correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentSummary'
+
+  /trainer/exercises:
+    get:
+      summary: Biblioteca de ejercicios del Trainer
+      operationId: getExercises
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de ejercicios disponibles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Exercise'
+    post:
+      summary: Crear nuevo ejercicio en la biblioteca
+      operationId: createExercise
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExerciseRequest'
+      responses:
+        '201':
+          description: Ejercicio creado correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Exercise'
+
+  /trainer/exercises/{id}:
+    put:
+      summary: Actualizar ejercicio existente en la biblioteca
+      operationId: updateExercise
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateExerciseRequest'
+      responses:
+        '200':
+          description: Ejercicio actualizado correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Exercise'
+        '403':
+          description: No autorizado para editar este ejercicio
+        '404':
+          description: Ejercicio no encontrado
+
+  /trainer/students/{id}/subscription:
+    patch:
+      summary: Actualizar estado de cuota y clases restantes del alumno
+      operationId: updateStudentSubscription
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSubscriptionRequest'
+      responses:
+        '200':
+          description: Cuota actualizada correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentSummary'
+
+  /trainer/students/{id}/activation-token:
+    post:
+      summary: Regenerar enlace y token de activación para un alumno
+      operationId: regenerateActivationToken
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Nuevo token de activación generado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegenerateActivationTokenResponse'
+        '404':
+          description: Alumno no encontrado
+
+  /trainer/students/{id}/reset-password-token:
+    post:
+      summary: Generar nuevo token de restablecimiento para un alumno y reenviar por WhatsApp
+      operationId: resetStudentPasswordToken
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Nuevo token de restablecimiento generado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegenerateActivationTokenResponse'
+        '404':
+          description: Alumno no encontrado
+
+  /trainer/routines:
+    get:
+      summary: Listar plantillas de rutina creadas por el entrenador
+      operationId: getTrainerRoutines
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de plantillas de rutina disponibles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RoutineTemplateSummary'
+    post:
+      summary: Crear plantilla de rutina con días y ejercicios
+      operationId: createRoutineTemplate
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoutineTemplateRequest'
+      responses:
+        '201':
+          description: Rutina creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveRoutineResponse'
+
+  /trainer/routines/{id}:
+    get:
+      summary: Obtener el detalle completo de una plantilla de rutina para visualización o edición
+      operationId: getTrainerRoutineById
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Estructura detallada de la rutina con días y ejercicios
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveRoutineResponse'
+        '403':
+          description: No autorizado para acceder a esta rutina
+        '404':
+          description: Rutina no encontrada
+    put:
+      summary: Actualizar plantilla de rutina existente
+      operationId: updateRoutineTemplate
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRoutineTemplateRequest'
+      responses:
+        '200':
+          description: Rutina actualizada correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveRoutineResponse'
+        '403':
+          description: No autorizado para editar esta rutina
+        '404':
+          description: Rutina no encontrada
+    delete:
+      summary: Eliminar plantilla de rutina (solo si no tiene alumnos asignados activos)
+      operationId: deleteRoutineTemplate
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Plantilla de rutina eliminada correctamente
+        '400':
+          description: Formato de identificador inválido
+        '401':
+          description: No autenticado
+        '403':
+          description: No autorizado para eliminar esta rutina
+        '404':
+          description: Plantilla de rutina no encontrada
+        '409':
+          description: Conflicto - La rutina tiene alumnos asignados actualmente activos
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /trainer/routines/{id}/duplicate:
+    post:
+      summary: Duplicar una plantilla de rutina existente
+      operationId: duplicateTrainerRoutine
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: Plantilla duplicada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveRoutineResponse'
+        '401':
+          description: No autenticado
+        '403':
+          description: No autorizado para duplicar esta rutina
+        '404':
+          description: Rutina no encontrada
+
+  /trainer/routines/assign:
+
+    post:
+      summary: Asignar rutina a un alumno
+      operationId: assignRoutineToStudent
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignRoutineRequest'
+      responses:
+        '200':
+          description: Rutina asignada correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignRoutineResponse'
+
+  /trainer/students/{id}/workouts:
+    get:
+      summary: Historial de entrenamientos completados por el alumno
+      operationId: getStudentWorkoutHistory
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Historial de sesiones con RPE, notas y cargas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentWorkoutHistoryResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+        user:
+          $ref: '#/components/schemas/UserProfile'
+
+    UserProfile:
+      type: object
+      required: [id, email, fullName, role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        fullName:
+          type: string
+        role:
+          type: string
+          enum: [TRAINER, STUDENT]
+        phoneWhatsapp:
+          type: string
+
+    Exercise:
+      type: object
+      required: [id, name, muscleGroup]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        muscleGroup:
+          type: string
+        movementPattern:
+          type: string
+        videoUrl:
+          type: string
+        executionTips:
+          type: string
+
+    CreateExerciseRequest:
+      type: object
+      required: [name, muscleGroup]
+      properties:
+        name:
+          type: string
+        muscleGroup:
+          type: string
+        movementPattern:
+          type: string
+        videoUrl:
+          type: string
+        executionTips:
+          type: string
+
+    UpdateExerciseRequest:
+      type: object
+      required: [name, muscleGroup]
+      properties:
+        name:
+          type: string
+        muscleGroup:
+          type: string
+        movementPattern:
+          type: string
+        videoUrl:
+          type: string
+        executionTips:
+          type: string
+
+    ActiveRoutineResponse:
+      type: object
+      required: [id, title, days]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoutineDayDetail'
+
+    RoutineDayDetail:
+      type: object
+      required: [id, name, orderIndex, exercises]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        orderIndex:
+          type: integer
+        exercises:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoutineExerciseDetail'
+
+    RoutineExerciseDetail:
+      type: object
+      required: [id, exerciseId, name, muscleGroup, targetSets, targetReps, suggestedRestSeconds]
+      properties:
+        id:
+          type: string
+          format: uuid
+        exerciseId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        muscleGroup:
+          type: string
+        targetSets:
+          type: integer
+        targetReps:
+          type: string
+        suggestedWeightKg:
+          type: number
+        suggestedRestSeconds:
+          type: integer
+          default: 90
+        videoUrl:
+          type: string
+        executionTips:
+          type: string
+        previousSession:
+          $ref: '#/components/schemas/PreviousExercisePerformance'
+
+    PreviousExercisePerformance:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date-time
+        sets:
+          type: array
+          items:
+            $ref: '#/components/schemas/SetPerformance'
+
+    SetPerformance:
+      type: object
+      required: [setNumber, reps, weightKg]
+      properties:
+        setNumber:
+          type: integer
+        reps:
+          type: integer
+        weightKg:
+          type: number
+
+    ExerciseHistoryResponse:
+      type: object
+      required: [exerciseId, logs]
+      properties:
+        exerciseId:
+          type: string
+          format: uuid
+        logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/PreviousExercisePerformance'
+
+    SyncWorkoutBatchRequest:
+      type: object
+      required: [sessions]
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkoutSessionPayload'
+
+    WorkoutSessionPayload:
+      type: object
+      required: [idempotencyKey, routineDayId, startedAt, completedAt, rpeScore, sets]
+      properties:
+        idempotencyKey:
+          type: string
+          format: uuid
+          description: Identificador único generado por el cliente para evitar duplicados en reintentos.
+        routineDayId:
+          type: string
+          format: uuid
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        rpeScore:
+          type: integer
+          minimum: 1
+          maximum: 10
+        studentNotes:
+          type: string
+        sets:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkoutSetLogPayload'
+
+    WorkoutSetLogPayload:
+      type: object
+      required: [exerciseId, setNumber, actualReps, actualWeightKg, isCompleted]
+      properties:
+        exerciseId:
+          type: string
+          format: uuid
+        setNumber:
+          type: integer
+        actualReps:
+          type: integer
+        actualWeightKg:
+          type: number
+        isCompleted:
+          type: boolean
+
+    SyncWorkoutBatchResponse:
+      type: object
+      required: [syncedCount, results]
+      properties:
+        syncedCount:
+          type: integer
+        results:
+          type: array
+          items:
+            type: object
+            required: [idempotencyKey, status]
+            properties:
+              idempotencyKey:
+                type: string
+                format: uuid
+              status:
+                type: string
+                enum: [CREATED, ALREADY_EXISTS, ERROR]
+              message:
+                type: string
+
+    StudentSummary:
+      type: object
+      required: [id, fullName, email, subscriptionStatus, sessionsRemaining]
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+        email:
+          type: string
+        phoneWhatsapp:
+          type: string
+        subscriptionStatus:
+          type: string
+          enum: [ACTIVE, EXPIRED, PENDING]
+        sessionsRemaining:
+          type: integer
+        nextBillingDate:
+          type: string
+          format: date
+        assignedRoutineTitle:
+          type: string
+        activationToken:
+          type: string
+          description: Token de activación de uso único si el alumno aún no definió su contraseña personal.
+
+    CreateStudentRequest:
+      type: object
+      required: [fullName, email, phoneWhatsapp]
+      properties:
+        fullName:
+          type: string
+        email:
+          type: string
+          format: email
+        phoneWhatsapp:
+          type: string
+        medicalNotes:
+          type: string
+        fitnessGoals:
+          type: string
+        sessionsRemaining:
+          type: integer
+          default: 0
+
+    UpdateSubscriptionRequest:
+      type: object
+      required: [subscriptionStatus]
+      properties:
+        subscriptionStatus:
+          type: string
+          enum: [ACTIVE, EXPIRED, PENDING]
+        sessionsRemainingDelta:
+          type: integer
+          description: Cantidad a sumar o restar de clases (ej. +8 o -1)
+        nextBillingDate:
+          type: string
+          format: date
+
+    CreateRoutineExerciseRequest:
+      type: object
+      required: [exerciseId, orderIndex, targetSets, targetReps, suggestedRestSeconds]
+      properties:
+        exerciseId:
+          type: string
+          format: uuid
+        orderIndex:
+          type: integer
+        targetSets:
+          type: integer
+        targetReps:
+          type: string
+        suggestedWeightKg:
+          type: number
+        suggestedRestSeconds:
+          type: integer
+        notes:
+          type: string
+
+    CreateRoutineDayRequest:
+      type: object
+      required: [name, orderIndex, exercises]
+      properties:
+        name:
+          type: string
+        orderIndex:
+          type: integer
+        exercises:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateRoutineExerciseRequest'
+
+    CreateRoutineTemplateRequest:
+      type: object
+      required: [title, days]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateRoutineDayRequest'
+
+    UpdateRoutineTemplateRequest:
+      type: object
+      required: [title, days]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateRoutineDayRequest'
+
+    RoutineTemplateSummary:
+      type: object
+      required: [id, title, daysCount, exercisesCount, activeStudentsCount, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        daysCount:
+          type: integer
+        exercisesCount:
+          type: integer
+        activeStudentsCount:
+          type: integer
+          description: Cantidad de alumnos que actualmente tienen esta rutina asignada activa.
+        createdAt:
+          type: string
+          format: date-time
+
+    AssignRoutineRequest:
+      type: object
+      required: [studentId, routineTemplateId]
+      properties:
+        studentId:
+          type: string
+          format: uuid
+        routineTemplateId:
+          type: string
+          format: uuid
+
+    AssignRoutineResponse:
+      type: object
+      required: [message, studentId, routineTemplateId]
+      properties:
+        message:
+          type: string
+        studentId:
+          type: string
+          format: uuid
+        routineTemplateId:
+          type: string
+          format: uuid
+
+    StudentWorkoutHistoryResponse:
+      type: object
+      required: [studentId, sessions]
+      properties:
+        studentId:
+          type: string
+          format: uuid
+        studentName:
+          type: string
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrainerWorkoutSessionDetail'
+
+    TrainerWorkoutSessionDetail:
+      type: object
+      required: [id, startedAt, completedAt, rpeScore, sets]
+      properties:
+        id:
+          type: string
+          format: uuid
+        routineDayName:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        rpeScore:
+          type: integer
+        studentNotes:
+          type: string
+        sets:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrainerWorkoutLogDetail'
+
+    TrainerWorkoutLogDetail:
+      type: object
+      required: [exerciseName, setNumber, actualReps, actualWeightKg, isCompleted]
+      properties:
+        exerciseName:
+          type: string
+        setNumber:
+          type: integer
+        actualReps:
+          type: integer
+        actualWeightKg:
+          type: number
+        isCompleted:
+          type: boolean
+
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+
+    VerifyActivationTokenResponse:
+      type: object
+      required: [fullName, email]
+      properties:
+        fullName:
+          type: string
+        email:
+          type: string
+
+    ActivateAccountRequest:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token:
+          type: string
+        newPassword:
+          type: string
+          minLength: 6
+
+    RegenerateActivationTokenResponse:
+      type: object
+      required: [activationToken]
+      properties:
+        activationToken:
+          type: string
+
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+          minLength: 8
+
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    ForgotPasswordResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    VerifyResetTokenResponse:
+      type: object
+      required: [email, fullName]
+      properties:
+        email:
+          type: string
+        fullName:
+          type: string
+
+    ResetPasswordRequest:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token:
+          type: string
+        newPassword:
+          type: string
+          minLength: 8
+
